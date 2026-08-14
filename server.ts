@@ -16,7 +16,7 @@ import {
   getCachedNewsFromDb,
   getLatestCachedNewsFromDb,
   saveNewsToDbCache,
-} from "./server/db";
+} from "./server/db.ts";
 
 dotenv.config();
 
