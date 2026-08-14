@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { PAKISTAN_CITIES, getCityDetails, getRecommendedDepartment } from '../data/pakistanLocations';
 import { CivicIssue, IssueCategory, IssueSeverity, UserProfile } from '../types';
-import { uploadIssuePhoto, submitCivicIssue } from '../lib/supabase';
+import { uploadIssuePhoto, submitCivicIssue, safeFetchJson } from '../lib/supabase';
 import { 
   Camera, 
   Upload, 
@@ -153,7 +153,12 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
       }
 
       // 1. Call Gemini Classification
-      const classifyRes = await fetch('/api/classify-issue', {
+      const classifyResult = await safeFetchJson<{
+        category?: IssueCategory;
+        severity?: IssueSeverity;
+        department?: string;
+        summary?: string;
+      }>('/api/classify-issue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,7 +170,7 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
         }),
       });
 
-      const aiResult = await classifyRes.json();
+      const aiResult = classifyResult.data || {};
       
       const category: IssueCategory = aiResult.category || manualCategory || 'other';
       const severity: IssueSeverity = aiResult.severity || manualSeverity || 'medium';

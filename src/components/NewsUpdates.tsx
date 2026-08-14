@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NewsItem } from '../types';
+import { safeFetchJson } from '../lib/supabase';
 import { 
   ExternalLink, 
   RefreshCw, 
@@ -38,11 +39,17 @@ export const NewsUpdates: React.FC<NewsUpdatesProps> = ({ currentCity, currentAr
     setError(null);
     try {
       const url = force ? '/api/news?force=true' : '/api/news';
-      const res = await fetch(url);
-      const data = await res.json();
+      const result = await safeFetchJson<{
+        items?: NewsItem[];
+        date?: string;
+        isOlderCache?: boolean;
+        message?: string;
+        error?: string;
+      }>(url);
 
-      if (!res.ok && (!data.items || data.items.length === 0)) {
-        throw new Error(data.error || "Today's civic news could not be loaded. Please try again later.");
+      const data = result.data;
+      if (!result.ok || !data || !Array.isArray(data.items) || data.items.length === 0) {
+        throw new Error(result.error || data?.error || "Today's civic news could not be loaded. Please try again later.");
       }
 
       setNews(data.items || []);

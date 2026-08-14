@@ -2,10 +2,19 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CivicIssue, UserProfile, IssueStatus } from '../types';
 import { SEED_ISSUES } from '../data/seedData';
 
-// Supabase Environment variables
+// Supabase Environment variables with multi-framework compatibility (Vite / Next.js / Standard)
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = 
+  metaEnv.VITE_SUPABASE_URL || 
+  metaEnv.NEXT_PUBLIC_SUPABASE_URL || 
+  metaEnv.SUPABASE_URL || 
+  'https://fldubtssnhnusqtnermz.supabase.co';
+
+const supabaseAnonKey = 
+  metaEnv.VITE_SUPABASE_ANON_KEY || 
+  metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  metaEnv.SUPABASE_ANON_KEY || 
+  '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -65,6 +74,54 @@ function saveLocalIssues(issues: CivicIssue[]) {
   }
 }
 
+// ----------------- SAFE JSON HTTP CLIENT HELPER -----------------
+export async function safeFetchJson<T = any>(
+  url: string, 
+  options?: RequestInit
+): Promise<{
+  ok: boolean;
+  status: number;
+  data: T | null;
+  error: string | null;
+}> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: res.status,
+          data,
+          error: data?.error || data?.message || `Server returned error (${res.status})`,
+        };
+      }
+      return { ok: true, status: res.status, data, error: null };
+    }
+
+    // Non-JSON response received (e.g. HTML 404 page or text error from static edge)
+    const rawText = await res.text();
+    console.warn(`[ShehriAwaz API] Non-JSON response from ${url} (HTTP ${res.status}):`, rawText.slice(0, 200));
+
+    return {
+      ok: false,
+      status: res.status,
+      data: null,
+      error: `Unexpected server response (${res.status}).`,
+    };
+  } catch (err: any) {
+    console.error(`[ShehriAwaz API] Network error calling ${url}:`, err);
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: err?.message || 'Connection error. Please check your network and try again.',
+    };
+  }
+}
+
 // ----------------- AUTH SERVICES -----------------
 export async function signUpUser(params: {
   email: string;
@@ -74,68 +131,181 @@ export async function signUpUser(params: {
   area: string;
   phone?: string;
 }): Promise<{ user: UserProfile | null; error: string | null }> {
-  try {
-    // 1. Call server-side Postgres / Supabase auth endpoint
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
+  // 1. Call server-side Postgres / Supabase auth endpoint
+  const result = await safeFetchJson<{ success: boolean; user: any; error?: string }>('/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
 
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      return { user: null, error: data.error || 'Registration failed. Please check your details.' };
-    }
-
+  if (result.ok && result.data?.success && result.data.user) {
     const profile: UserProfile = {
-      id: data.user.id,
-      email: data.user.email,
-      full_name: data.user.full_name,
-      city: data.user.city,
-      area: data.user.area,
-      phone: data.user.phone,
-      created_at: data.user.created_at,
+      id: String(result.data.user.id),
+      email: result.data.user.email,
+      full_name: result.data.user.full_name,
+      city: result.data.user.city,
+      area: result.data.user.area,
+      phone: result.data.user.phone,
+      created_at: result.data.user.created_at,
     };
 
     saveLocalUser(profile);
     return { user: profile, error: null };
-  } catch (err: any) {
-    return { user: null, error: err.message || 'Connection error during registration.' };
   }
+
+  // If server returned a business validation error (e.g. 400 user exists), return it directly
+  if (result.data?.error) {
+    return { user: null, error: result.data.error };
+  }
+
+  // 2. Direct browser Supabase Auth fallback if available
+  if (supabase) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: params.email,
+        password: params.password,
+        options: {
+          data: {
+            full_name: params.fullName,
+            city: params.city,
+            area: params.area,
+            phone: params.phone,
+          },
+        },
+      });
+
+      if (authError) {
+        return { user: null, error: authError.message };
+      }
+
+      if (authData?.user) {
+        const userId = authData.user.id;
+        try {
+          await supabase.from('profiles').upsert({
+            id: userId,
+            email: params.email,
+            full_name: params.fullName,
+            city: params.city,
+            area: params.area,
+            phone: params.phone || null,
+          });
+        } catch (profileErr) {
+          console.warn('Direct profile insertion note:', profileErr);
+        }
+
+        const profile: UserProfile = {
+          id: userId,
+          email: params.email,
+          full_name: params.fullName,
+          city: params.city,
+          area: params.area,
+          phone: params.phone,
+          created_at: new Date().toISOString(),
+        };
+
+        saveLocalUser(profile);
+        return { user: profile, error: null };
+      }
+    } catch (sbErr: any) {
+      console.error('Supabase client signup error:', sbErr);
+      return { user: null, error: sbErr.message || "We couldn't create your account right now. Please try again." };
+    }
+  }
+
+  return { 
+    user: null, 
+    error: "We couldn't create your account right now. Please try again." 
+  };
 }
 
 export async function signInUser(
   email: string,
   pass: string
 ): Promise<{ user: UserProfile | null; error: string | null }> {
-  try {
-    // 1. Call server-side Postgres / Supabase login endpoint
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass }),
-    });
+  // 1. Call server-side Postgres / Supabase login endpoint
+  const result = await safeFetchJson<{ success: boolean; user: any; error?: string }>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: pass }),
+  });
 
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      return { user: null, error: data.error || 'Email or password is incorrect. Please try again.' };
-    }
-
+  if (result.ok && result.data?.success && result.data.user) {
     const profile: UserProfile = {
-      id: data.user.id,
-      email: data.user.email,
-      full_name: data.user.full_name,
-      city: data.user.city,
-      area: data.user.area,
-      phone: data.user.phone,
-      created_at: data.user.created_at,
+      id: String(result.data.user.id),
+      email: result.data.user.email,
+      full_name: result.data.user.full_name,
+      city: result.data.user.city,
+      area: result.data.user.area,
+      phone: result.data.user.phone,
+      created_at: result.data.user.created_at,
     };
 
     saveLocalUser(profile);
     return { user: profile, error: null };
-  } catch (err: any) {
-    return { user: null, error: err.message || 'Connection error during login.' };
   }
+
+  // If server returned a business validation error (e.g. 401 invalid credentials), return it
+  if (result.data?.error) {
+    return { user: null, error: result.data.error };
+  }
+
+  // 2. Direct browser Supabase Auth fallback if available
+  if (supabase) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password: pass,
+      });
+
+      if (authError) {
+        return { user: null, error: authError.message };
+      }
+
+      if (authData?.user) {
+        const userId = authData.user.id;
+        let userProfile: UserProfile = {
+          id: userId,
+          email: authData.user.email || email,
+          full_name: authData.user.user_metadata?.full_name || email.split('@')[0],
+          city: authData.user.user_metadata?.city || 'Lahore',
+          area: authData.user.user_metadata?.area || 'Johar Town',
+          phone: authData.user.user_metadata?.phone || '',
+          created_at: authData.user.created_at || new Date().toISOString(),
+        };
+
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+          if (profileRow) {
+            userProfile = {
+              ...userProfile,
+              full_name: profileRow.full_name || userProfile.full_name,
+              city: profileRow.city || userProfile.city,
+              area: profileRow.area || userProfile.area,
+              phone: profileRow.phone || userProfile.phone,
+            };
+          }
+        } catch (pErr) {
+          console.warn('Profile fetch notice:', pErr);
+        }
+
+        saveLocalUser(userProfile);
+        return { user: userProfile, error: null };
+      }
+    } catch (sbErr: any) {
+      console.error('Supabase client login error:', sbErr);
+      return { user: null, error: sbErr.message || 'Email or password is incorrect. Please try again.' };
+    }
+  }
+
+  return { 
+    user: null, 
+    error: 'Email or password is incorrect. Please try again.' 
+  };
 }
 
 export async function signOutUser(): Promise<void> {
@@ -153,16 +323,13 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const cached = getLocalUser();
   if (cached?.id) {
     try {
-      const res = await fetch(`/api/auth/me?userId=${cached.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          saveLocalUser(data.user);
-          return data.user;
-        }
+      const result = await safeFetchJson<{ success: boolean; user: any }>(`/api/auth/me?userId=${cached.id}`);
+      if (result.ok && result.data?.success && result.data.user) {
+        saveLocalUser(result.data.user);
+        return result.data.user;
       }
     } catch (e) {
-      // Fallback to local session on temporary network hitch
+      // Fallback to local session
     }
   }
   return cached;
@@ -180,7 +347,7 @@ export async function updateUserProfile(data: {
   if (!current?.id) return null;
 
   try {
-    const res = await fetch('/api/auth/profile', {
+    const result = await safeFetchJson<{ success: boolean; user: any }>('/api/auth/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -188,12 +355,9 @@ export async function updateUserProfile(data: {
         ...data,
       }),
     });
-    if (res.ok) {
-      const respData = await res.json();
-      if (respData.success && respData.user) {
-        saveLocalUser(respData.user);
-        return respData.user;
-      }
+    if (result.ok && result.data?.success && result.data.user) {
+      saveLocalUser(result.data.user);
+      return result.data.user;
     }
   } catch (e) {
     console.error('Update profile error:', e);
@@ -217,7 +381,7 @@ export async function uploadIssuePhoto(file: File): Promise<string> {
     reader.onloadend = async () => {
       const base64Data = reader.result as string;
       try {
-        const res = await fetch('/api/upload-photo', {
+        const result = await safeFetchJson<{ success: boolean; url: string }>('/api/upload-photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -226,11 +390,8 @@ export async function uploadIssuePhoto(file: File): Promise<string> {
             filename: file.name,
           }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.url) {
-            return resolve(data.url);
-          }
+        if (result.ok && result.data?.success && result.data.url) {
+          return resolve(result.data.url);
         }
       } catch (err) {
         console.warn('Upload API fallback to data URL:', err);
@@ -266,14 +427,11 @@ export async function fetchAllIssues(filters?: {
       params.append('userId', filters.userId);
     }
 
-    const res = await fetch(`/api/issues?${params.toString()}`);
-    if (res.ok) {
-      const body = await res.json();
-      if (body.success && Array.isArray(body.data)) {
-        if (body.data.length > 0) {
-          saveLocalIssues(body.data);
-          return body.data;
-        }
+    const result = await safeFetchJson<{ success: boolean; data: CivicIssue[] }>(`/api/issues?${params.toString()}`);
+    if (result.ok && result.data?.success && Array.isArray(result.data.data)) {
+      if (result.data.data.length > 0) {
+        saveLocalIssues(result.data.data);
+        return result.data.data;
       }
     }
   } catch (e) {
@@ -312,19 +470,16 @@ export async function submitCivicIssue(issueData: {
   };
 
   try {
-    const res = await fetch('/api/issues', {
+    const result = await safeFetchJson<{ success: boolean; data: CivicIssue }>('/api/issues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    if (res.ok) {
-      const body = await res.json();
-      if (body.success && body.data) {
-        const local = getLocalIssues();
-        saveLocalIssues([body.data, ...local]);
-        return body.data;
-      }
+    if (result.ok && result.data?.success && result.data.data) {
+      const local = getLocalIssues();
+      saveLocalIssues([result.data.data, ...local]);
+      return result.data.data;
     }
   } catch (e) {
     console.warn('Postgres insert error:', e);
@@ -347,27 +502,24 @@ export async function updateCivicIssueStatus(
   newStatus: IssueStatus
 ): Promise<boolean> {
   try {
-    const res = await fetch(`/api/issues/${issueId}/status`, {
+    const result = await safeFetchJson<{ success: boolean }>(`/api/issues/${issueId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) {
-      const body = await res.json();
-      if (body.success) {
-        const list = getLocalIssues();
-        const updated = list.map((item) =>
-          item.id === issueId
-            ? {
-                ...item,
-                status: newStatus,
-                resolved_at: newStatus === 'resolved' ? new Date().toISOString() : undefined,
-              }
-            : item
-        );
-        saveLocalIssues(updated);
-        return true;
-      }
+    if (result.ok && result.data?.success) {
+      const list = getLocalIssues();
+      const updated = list.map((item) =>
+        item.id === issueId
+          ? {
+              ...item,
+              status: newStatus,
+              resolved_at: newStatus === 'resolved' ? new Date().toISOString() : undefined,
+            }
+          : item
+      );
+      saveLocalIssues(updated);
+      return true;
     }
   } catch (e) {
     console.warn('Status update API error:', e);
@@ -398,9 +550,9 @@ export async function getPostgresHealth(): Promise<{
   error?: string | null;
 }> {
   try {
-    const res = await fetch('/api/db-status');
-    if (res.ok) {
-      return await res.json();
+    const result = await safeFetchJson<any>('/api/db-status');
+    if (result.ok && result.data) {
+      return result.data;
     }
     return { connected: false, error: 'Could not contact database server' };
   } catch (e: any) {

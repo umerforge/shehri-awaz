@@ -10,6 +10,7 @@ import {
   RefreshCw,
   MapPin
 } from 'lucide-react';
+import { safeFetchJson } from '../lib/supabase';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -69,7 +70,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const result = await safeFetchJson<{ reply?: string }>('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,10 +80,13 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
         }),
       });
 
-      const data = await res.json();
+      const replyText = result.ok && result.data?.reply
+        ? result.data.reply
+        : 'I am currently unable to retrieve civic information. Please check back shortly.';
+
       const botMsg: ChatMessage = {
         role: 'assistant',
-        content: data.reply || 'I am currently unable to retrieve civic information. Please check back shortly.',
+        content: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
