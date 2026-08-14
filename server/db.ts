@@ -30,6 +30,11 @@ export function getDbPool(): pg.Pool {
       console.error('Unexpected error on idle Postgres client', err);
       lastError = err.message;
     });
+
+    // Automatically initialize database tables if they don't exist
+    initPostgresDatabase().catch((err) => {
+      console.warn('Postgres auto-initialization notice:', err.message || err);
+    });
   }
   return pool;
 }
@@ -266,10 +271,11 @@ export async function dbSignUp(params: {
   area: string;
   phone?: string;
 }) {
-  const p = getDbPool();
-  const client = await p.connect();
-
+  let client;
   try {
+    const p = getDbPool();
+    client = await p.connect();
+    
     await client.query('BEGIN');
 
     // Check if user already exists
@@ -316,11 +322,19 @@ export async function dbSignUp(params: {
 
     return { user: userProfile, error: null };
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        // Ignore
+      }
+    }
     console.error('dbSignUp error:', err);
-    return { user: null, error: 'Registration failed. Please check your details and try again.' };
+    return { user: null, error: `Registration failed: ${err.message || err}` };
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
