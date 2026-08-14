@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1A2420;
+    background-color: #F3F5F2;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Lora', Georgia, Cambria, 'Times New Roman', serif;
+  }
+
+  .urdu-text {
+    font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif;
+  }
+}
+
+/* Custom Signature Stamp Effect */
+.stamp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 4px;
+  line-height: 1;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.stamp-reported {
+  border-color: #8D5B00;
+  color: #8D5B00;
+  background-color: #FFF9EC;
+}
+
+.stamp-in-review {
+  border-color: #B88917;
+  color: #8A6409;
+  background-color: #FFFDF0;
+}
+
+.stamp-resolved {
+  border-color: #287A4B;
+  color: #1B5E38;
+  background-color: #EEF8F1;
+}
+
+.stamp-urgent {
+  border-color: #C0392B;
+  color: #96281B;
+  background-color: #FDEDEC;
+}

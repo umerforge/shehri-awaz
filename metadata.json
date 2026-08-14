@@ -1,0 +1,10 @@
+{
+  "name": "ShehriAwaz",
+  "description": "Pakistani civic reporting and public information platform for citizens to report issues, track responsible departments, and view area civic updates.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

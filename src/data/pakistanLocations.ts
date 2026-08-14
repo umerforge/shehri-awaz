@@ -1,0 +1,241 @@
+import { CityOption } from '../types';
+
+export const PAKISTAN_CITIES: CityOption[] = [
+  {
+    name: 'Lahore',
+    urduName: 'لاہور',
+    province: 'Punjab',
+    popularAreas: [
+      'Johar Town',
+      'Model Town',
+      'Gulberg',
+      'DHA (Defence)',
+      'Allama Iqbal Town',
+      'Faisal Town',
+      'Samanabad',
+      'Shadman',
+      'Wapda Town',
+      'Cantt',
+      'Baghbanpura',
+      'Township',
+    ],
+    departments: {
+      garbage: 'LWMC (Lahore Waste Management Company) / TMA',
+      water: 'WASA Lahore (Water and Sanitation Agency)',
+      electricity: 'LESCO (Lahore Electric Supply Company)',
+      road: 'TEPA / LDA (Lahore Development Authority) & C&W',
+      other: 'PHA Lahore / District Administration',
+    },
+  },
+  {
+    name: 'Karachi',
+    urduName: 'کراچی',
+    province: 'Sindh',
+    popularAreas: [
+      'Clifton',
+      'DHA (Defence)',
+      'Gulshan-e-Iqbal',
+      'North Nazimabad',
+      'PECHS',
+      'Saddar',
+      'Gulistan-e-Jauhar',
+      'Korangi',
+      'Malir',
+      'Federal B Area',
+      'Nazimabad',
+      'Lyari',
+    ],
+    departments: {
+      garbage: 'SSWMB (Sindh Solid Waste Management Board) / KMC',
+      water: 'KWSC (Karachi Water & Sewerage Corporation)',
+      electricity: 'K-Electric',
+      road: 'KMC Works & Services / DHA / Cantonment Board',
+      other: 'District Municipal Corporation (DMC)',
+    },
+  },
+  {
+    name: 'Islamabad',
+    urduName: 'اسلام آباد',
+    province: 'Federal Capital',
+    popularAreas: [
+      'F-7 (Jinnah Super)',
+      'F-8',
+      'F-10 (Markaz)',
+      'F-11',
+      'G-9 (Karachi Company)',
+      'G-10',
+      'G-11',
+      'I-8 (Markaz)',
+      'I-9 / I-10',
+      'E-11',
+      'Bahria Town',
+      'DHA Islamabad',
+    ],
+    departments: {
+      garbage: 'CDA Sanitation Directorate',
+      water: 'CDA Water Supply Directorate',
+      electricity: 'IESCO (Islamabad Electric Supply Company)',
+      road: 'CDA Directorate of Roads & Maintenance',
+      other: 'ICT Administration / MCI',
+    },
+  },
+  {
+    name: 'Rawalpindi',
+    urduName: 'راولپنڈی',
+    province: 'Punjab',
+    popularAreas: [
+      'Satellite Town',
+      'Commercial Market',
+      'Saddar',
+      'Westridge',
+      'Chaklala Scheme 3',
+      'Bahria Town Rawalpindi',
+      'Peshawar Road',
+      'Tench Bhatta',
+      'Adyala Road',
+      'Morgah',
+    ],
+    departments: {
+      garbage: 'RWMC (Rawalpindi Waste Management Company)',
+      water: 'WASA Rawalpindi / Rawalpindi Cantt Board',
+      electricity: 'IESCO (Islamabad Electric Supply Company)',
+      road: 'RDA (Rawalpindi Development Authority) / C&W',
+      other: 'Municipal Corporation Rawalpindi',
+    },
+  },
+  {
+    name: 'Peshawar',
+    urduName: 'پشاور',
+    province: 'Khyber Pakhtunkhwa',
+    popularAreas: [
+      'Hayatabad',
+      'University Town',
+      'Cantt',
+      'Gulbahar',
+      'Saddar',
+      'Warsak Road',
+      'Ring Road',
+      'Kohat Road',
+    ],
+    departments: {
+      garbage: 'WSSP (Water and Sanitation Services Peshawar)',
+      water: 'WSSP (Water & Sanitation Services Peshawar)',
+      electricity: 'PESCO (Peshawar Electric Supply Company)',
+      road: 'PDA (Peshawar Development Authority) / C&W KPK',
+      other: 'City Metropolitan Peshawar',
+    },
+  },
+  {
+    name: 'Multan',
+    urduName: 'ملتان',
+    province: 'Punjab',
+    popularAreas: [
+      'Gulgasht Colony',
+      'Bosan Road',
+      'Cantt',
+      'Shah Rukn-e-Alam Colony',
+      'Model Town',
+      'New Multan',
+      'Chungi No. 9',
+    ],
+    departments: {
+      garbage: 'MWMC (Multan Waste Management Company) / TMA',
+      water: 'WASA Multan',
+      electricity: 'MEPCO (Multan Electric Power Company)',
+      road: 'MDA (Multan Development Authority) / C&W',
+      other: 'TMA Multan / Municipal Corporation',
+    },
+  },
+  {
+    name: 'Faisalabad',
+    urduName: 'فیصل آباد',
+    province: 'Punjab',
+    popularAreas: [
+      'D Ground',
+      'Peoples Colony No. 1',
+      'Madina Town',
+      'Kohinoor City',
+      'Ghulam Muhammad Abad',
+      'Jaranwala Road',
+      'Canal Road',
+    ],
+    departments: {
+      garbage: 'FWMC (Faisalabad Waste Management Company)',
+      water: 'WASA Faisalabad',
+      electricity: 'FESCO (Faisalabad Electric Supply Company)',
+      road: 'FDA (Faisalabad Development Authority) / C&W',
+      other: 'Municipal Corporation Faisalabad',
+    },
+  },
+  {
+    name: 'Quetta',
+    urduName: 'کوئٹہ',
+    province: 'Balochistan',
+    popularAreas: [
+      'Cantt',
+      'Samungli Road',
+      'Zarghoon Road',
+      'Satellite Town Quetta',
+      'Jinnah Town',
+      'Shahbaz Town',
+    ],
+    departments: {
+      garbage: 'Metropolitan Corporation Quetta (MCQ)',
+      water: 'WASA Quetta',
+      electricity: 'QESCO (Quetta Electric Supply Company)',
+      road: 'QDA / C&W Balochistan',
+      other: 'District Administration Quetta',
+    },
+  },
+  {
+    name: 'Gujranwala',
+    urduName: 'گوجرانوالہ',
+    province: 'Punjab',
+    popularAreas: [
+      'Model Town',
+      'Satellite Town',
+      'DC Colony',
+      'Wapda Town',
+      'Civil Lines',
+      'G.T. Road Corridor',
+    ],
+    departments: {
+      garbage: 'GWMC (Gujranwala Waste Management Company)',
+      water: 'WASA Gujranwala',
+      electricity: 'GEPCO (Gujranwala Electric Power Company)',
+      road: 'GDA / C&W Punjab',
+      other: 'TMA Gujranwala',
+    },
+  },
+];
+
+export function getCityDetails(cityName: string): CityOption {
+  const found = PAKISTAN_CITIES.find(
+    (c) => c.name.toLowerCase() === cityName.toLowerCase()
+  );
+  if (found) return found;
+
+  // Extensible default for any other Pakistani city
+  return {
+    name: cityName,
+    urduName: cityName,
+    province: 'Pakistan',
+    popularAreas: ['Main Market', 'Civil Lines', 'City Center', 'Model Town', 'Cantt Area'],
+    departments: {
+      garbage: 'TMA / Solid Waste Management Wing',
+      water: 'WASA / Local Sanitation Department',
+      electricity: 'Local DISCO Power Distribution Company',
+      road: 'Communication & Works (C&W) / TMA',
+      other: 'District Commissioner Office / Municipal Administration',
+    },
+  };
+}
+
+export function getRecommendedDepartment(cityName: string, category: string): string {
+  const city = getCityDetails(cityName);
+  if (category === 'garbage') return city.departments.garbage;
+  if (category === 'water') return city.departments.water;
+  if (category === 'electricity') return city.departments.electricity;
+  if (category === 'road') return city.departments.road;
+  return city.departments.other;
+}
