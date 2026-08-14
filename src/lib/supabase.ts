@@ -131,7 +131,118 @@ export async function signUpUser(params: {
   area: string;
   phone?: string;
 }): Promise<{ user: UserProfile | null; error: string | null }> {
-  // 1. Call server-side Postgres / Supabase auth endpoint
+  console.log(`[ShehriAwaz Auth] === SIGNUP PROCESS STARTED ===`);
+  console.log(`[ShehriAwaz Auth] Target Email: ${params.email}`);
+  console.log(`[ShehriAwaz Auth] Target Location: ${params.city}, ${params.area}`);
+  console.log(`[ShehriAwaz Auth] Supabase Configured: ${isSupabaseConfigured} (URL: ${supabaseUrl})`);
+
+  // 1. Primary Direct Supabase Auth flow (Client-Side Standard)
+  if (supabase) {
+    try {
+      console.log('[ShehriAwaz Auth] Invoking supabase.auth.signUp()...');
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: params.email,
+        password: params.password,
+        options: {
+          data: {
+            full_name: params.fullName,
+            city: params.city,
+            area: params.area,
+            phone: params.phone || '',
+          },
+        },
+      });
+
+      if (authError) {
+        console.error('[ShehriAwaz Auth] Supabase Auth signUp returned error:', {
+          message: authError.message,
+          code: (authError as any).code,
+          status: (authError as any).status,
+          details: (authError as any).details,
+          hint: (authError as any).hint,
+        });
+
+        const msgLower = (authError.message || '').toLowerCase();
+        if (msgLower.includes('already registered') || msgLower.includes('user already exists')) {
+          return {
+            user: null,
+            error: 'An account with this email address already exists. Please login instead.',
+          };
+        }
+        if (msgLower.includes('rate limit') || msgLower.includes('too many requests')) {
+          return {
+            user: null,
+            error: 'Too many signup attempts. Please wait a moment and try again.',
+          };
+        }
+        if (msgLower.includes('password') && msgLower.includes('least')) {
+          return {
+            user: null,
+            error: authError.message,
+          };
+        }
+
+        return { user: null, error: authError.message || "We couldn't create your account right now. Please try again." };
+      }
+
+      if (authData?.user) {
+        // In Supabase, if email confirmation is on and user exists, identities array is empty
+        if (authData.user.identities && authData.user.identities.length === 0) {
+          console.warn('[ShehriAwaz Auth] User already exists (empty identities array returned by Supabase).');
+          return {
+            user: null,
+            error: 'An account with this email address already exists. Please login instead.',
+          };
+        }
+
+        const userId = authData.user.id;
+        console.log(`[ShehriAwaz Auth] Supabase Auth signUp SUCCEEDED! User ID: ${userId}, Session Active: ${Boolean(authData.session)}`);
+
+        // Insert / Upsert citizen profile record
+        console.log('[ShehriAwaz Auth] Inserting/upserting public.profiles record...');
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: userId,
+          email: params.email,
+          full_name: params.fullName,
+          city: params.city,
+          area: params.area,
+          phone: params.phone || null,
+        });
+
+        if (profileError) {
+          console.warn('[ShehriAwaz Auth] Supabase public.profiles upsert notice (may be auto-handled by DB trigger):', {
+            message: profileError.message,
+            code: profileError.code,
+            details: profileError.details,
+            hint: profileError.hint,
+          });
+        } else {
+          console.log('[ShehriAwaz Auth] public.profiles upsert SUCCEEDED.');
+        }
+
+        const profile: UserProfile = {
+          id: userId,
+          email: params.email,
+          full_name: params.fullName,
+          city: params.city,
+          area: params.area,
+          phone: params.phone || '',
+          created_at: authData.user.created_at || new Date().toISOString(),
+        };
+
+        saveLocalUser(profile);
+        console.log('[ShehriAwaz Auth] === SIGNUP COMPLETED SUCCESSFULLY ===');
+        return { user: profile, error: null };
+      }
+    } catch (sbErr: any) {
+      console.error('[ShehriAwaz Auth] Unexpected exception during Supabase client signup:', sbErr);
+    }
+  } else {
+    console.warn('[ShehriAwaz Auth] Supabase client is not configured (missing VITE_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY in environment).');
+  }
+
+  // 2. Server API fallback route (/api/auth/signup) for full-stack environments
+  console.log('[ShehriAwaz Auth] Attempting server-side signup via /api/auth/signup...');
   const result = await safeFetchJson<{ success: boolean; user: any; error?: string }>('/api/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -139,13 +250,14 @@ export async function signUpUser(params: {
   });
 
   if (result.ok && result.data?.success && result.data.user) {
+    console.log('[ShehriAwaz Auth] Server-side signup SUCCEEDED.');
     const profile: UserProfile = {
       id: String(result.data.user.id),
       email: result.data.user.email,
       full_name: result.data.user.full_name,
       city: result.data.user.city,
       area: result.data.user.area,
-      phone: result.data.user.phone,
+      phone: result.data.user.phone || '',
       created_at: result.data.user.created_at,
     };
 
@@ -155,66 +267,21 @@ export async function signUpUser(params: {
 
   // If server returned a business validation error (e.g. 400 user exists), return it directly
   if (result.data?.error) {
+    console.warn('[ShehriAwaz Auth] Server returned validation error:', result.data.error);
     return { user: null, error: result.data.error };
   }
 
-  // 2. Direct browser Supabase Auth fallback if available
-  if (supabase) {
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: params.email,
-        password: params.password,
-        options: {
-          data: {
-            full_name: params.fullName,
-            city: params.city,
-            area: params.area,
-            phone: params.phone,
-          },
-        },
-      });
-
-      if (authError) {
-        return { user: null, error: authError.message };
-      }
-
-      if (authData?.user) {
-        const userId = authData.user.id;
-        try {
-          await supabase.from('profiles').upsert({
-            id: userId,
-            email: params.email,
-            full_name: params.fullName,
-            city: params.city,
-            area: params.area,
-            phone: params.phone || null,
-          });
-        } catch (profileErr) {
-          console.warn('Direct profile insertion note:', profileErr);
-        }
-
-        const profile: UserProfile = {
-          id: userId,
-          email: params.email,
-          full_name: params.fullName,
-          city: params.city,
-          area: params.area,
-          phone: params.phone,
-          created_at: new Date().toISOString(),
-        };
-
-        saveLocalUser(profile);
-        return { user: profile, error: null };
-      }
-    } catch (sbErr: any) {
-      console.error('Supabase client signup error:', sbErr);
-      return { user: null, error: sbErr.message || "We couldn't create your account right now. Please try again." };
-    }
-  }
+  console.error('[ShehriAwaz Auth] All signup strategies exhausted. Detailed diagnosis:', {
+    isSupabaseConfigured,
+    supabaseUrl,
+    hasAnonKey: Boolean(supabaseAnonKey),
+    serverApiStatus: result.status,
+    serverApiError: result.error,
+  });
 
   return { 
     user: null, 
-    error: "We couldn't create your account right now. Please try again." 
+    error: result.error || "We couldn't create your account right now. Please verify your connection or check environment configuration." 
   };
 }
 
@@ -222,47 +289,41 @@ export async function signInUser(
   email: string,
   pass: string
 ): Promise<{ user: UserProfile | null; error: string | null }> {
-  // 1. Call server-side Postgres / Supabase login endpoint
-  const result = await safeFetchJson<{ success: boolean; user: any; error?: string }>('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: pass }),
-  });
+  console.log(`[ShehriAwaz Auth] === LOGIN PROCESS STARTED ===`);
+  console.log(`[ShehriAwaz Auth] Target Email: ${email}`);
+  console.log(`[ShehriAwaz Auth] Supabase Configured: ${isSupabaseConfigured}`);
 
-  if (result.ok && result.data?.success && result.data.user) {
-    const profile: UserProfile = {
-      id: String(result.data.user.id),
-      email: result.data.user.email,
-      full_name: result.data.user.full_name,
-      city: result.data.user.city,
-      area: result.data.user.area,
-      phone: result.data.user.phone,
-      created_at: result.data.user.created_at,
-    };
-
-    saveLocalUser(profile);
-    return { user: profile, error: null };
-  }
-
-  // If server returned a business validation error (e.g. 401 invalid credentials), return it
-  if (result.data?.error) {
-    return { user: null, error: result.data.error };
-  }
-
-  // 2. Direct browser Supabase Auth fallback if available
+  // 1. Primary Direct Supabase Auth flow (Client-Side Standard)
   if (supabase) {
     try {
+      console.log('[ShehriAwaz Auth] Invoking supabase.auth.signInWithPassword()...');
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password: pass,
       });
 
       if (authError) {
-        return { user: null, error: authError.message };
+        console.error('[ShehriAwaz Auth] Supabase signInWithPassword error:', {
+          message: authError.message,
+          code: (authError as any).code,
+          status: (authError as any).status,
+        });
+
+        const msgLower = (authError.message || '').toLowerCase();
+        if (msgLower.includes('invalid login credentials') || msgLower.includes('invalid credentials')) {
+          return { user: null, error: 'Incorrect email or password. Please try again.' };
+        }
+        if (msgLower.includes('email not confirmed')) {
+          return { user: null, error: 'Please confirm your email address before signing in.' };
+        }
+
+        return { user: null, error: authError.message || 'Incorrect email or password. Please try again.' };
       }
 
       if (authData?.user) {
         const userId = authData.user.id;
+        console.log(`[ShehriAwaz Auth] Supabase signIn SUCCEEDED! User ID: ${userId}`);
+
         let userProfile: UserProfile = {
           id: userId,
           email: authData.user.email || email,
@@ -274,13 +335,15 @@ export async function signInUser(
         };
 
         try {
-          const { data: profileRow } = await supabase
+          console.log('[ShehriAwaz Auth] Fetching profile from public.profiles table...');
+          const { data: profileRow, error: pError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', userId)
             .single();
 
           if (profileRow) {
+            console.log('[ShehriAwaz Auth] Profile loaded from DB:', profileRow.full_name);
             userProfile = {
               ...userProfile,
               full_name: profileRow.full_name || userProfile.full_name,
@@ -288,23 +351,53 @@ export async function signInUser(
               area: profileRow.area || userProfile.area,
               phone: profileRow.phone || userProfile.phone,
             };
+          } else if (pError) {
+            console.warn('[ShehriAwaz Auth] Profile fetch note:', pError.message);
           }
         } catch (pErr) {
-          console.warn('Profile fetch notice:', pErr);
+          console.warn('[ShehriAwaz Auth] Profile query exception:', pErr);
         }
 
         saveLocalUser(userProfile);
+        console.log('[ShehriAwaz Auth] === LOGIN COMPLETED SUCCESSFULLY ===');
         return { user: userProfile, error: null };
       }
     } catch (sbErr: any) {
-      console.error('Supabase client login error:', sbErr);
-      return { user: null, error: sbErr.message || 'Email or password is incorrect. Please try again.' };
+      console.error('[ShehriAwaz Auth] Unexpected error during Supabase signIn:', sbErr);
     }
+  }
+
+  // 2. Server API fallback route (/api/auth/login)
+  console.log('[ShehriAwaz Auth] Attempting server-side login via /api/auth/login...');
+  const result = await safeFetchJson<{ success: boolean; user: any; error?: string }>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: pass }),
+  });
+
+  if (result.ok && result.data?.success && result.data.user) {
+    console.log('[ShehriAwaz Auth] Server-side login SUCCEEDED.');
+    const profile: UserProfile = {
+      id: String(result.data.user.id),
+      email: result.data.user.email,
+      full_name: result.data.user.full_name,
+      city: result.data.user.city,
+      area: result.data.user.area,
+      phone: result.data.user.phone || '',
+      created_at: result.data.user.created_at,
+    };
+
+    saveLocalUser(profile);
+    return { user: profile, error: null };
+  }
+
+  if (result.data?.error) {
+    return { user: null, error: result.data.error };
   }
 
   return { 
     user: null, 
-    error: 'Email or password is incorrect. Please try again.' 
+    error: 'Incorrect email or password. Please try again.' 
   };
 }
 
