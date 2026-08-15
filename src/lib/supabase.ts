@@ -134,7 +134,7 @@ export async function signUpUser(params: {
 
   try {
     console.log('[ShehriAwaz Auth] Invoking supabase.auth.signUp()...');
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const signUpResult = await supabase.auth.signUp({
       email: params.email,
       password: params.password,
       options: {
@@ -146,6 +146,7 @@ export async function signUpUser(params: {
         },
       },
     });
+    let { data: authData, error: authError } = signUpResult;
 
     if (authError) {
       console.error('[ShehriAwaz Auth] Supabase Auth signUp returned error:', {
@@ -187,6 +188,43 @@ export async function signUpUser(params: {
           user: null,
           error: 'An account with this email address already exists. Please login instead.',
         };
+      }
+
+      if (!authData.session) {
+        console.warn('[ShehriAwaz Auth] No session returned by Supabase — attempting server-side email auto-confirm...');
+
+        try {
+          const confirmResult = await safeFetchJson<{ success: boolean; error?: string }>('/api/auth/confirm-signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: authData.user.id }),
+          });
+
+          if (confirmResult.ok && confirmResult.data?.success) {
+            console.log('[ShehriAwaz Auth] Email auto-confirmed by server. Signing in...');
+            const loginResult = await supabase.auth.signInWithPassword({
+              email: params.email,
+              password: params.password,
+            });
+
+            if (loginResult.error) {
+              return { user: null, error: loginResult.error.message };
+            }
+            if (!loginResult.data?.user) {
+              return { user: null, error: 'Account created! Please try signing in.' };
+            }
+            authData = loginResult.data;
+          }
+        } catch (e) {
+          console.warn('[ShehriAwaz Auth] Auto-confirm request failed:', e);
+        }
+
+        if (!authData.session) {
+          return {
+            user: null,
+            error: 'Account created! Please check your email to confirm your address, then sign in.',
+          };
+        }
       }
 
       const userId = authData.user.id;

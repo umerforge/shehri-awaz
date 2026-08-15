@@ -81,6 +81,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) {
         if (error.toLowerCase().includes('user already registered')) {
           setErrorMsg('An account with this email already exists. Please login instead.');
+        } else if (error.startsWith('Account created!')) {
+          setSuccessMsg(error);
         } else {
           setErrorMsg(error);
         }

@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import {
   initPostgresDatabase,
@@ -49,6 +50,7 @@ app.get("/api/health", async (req, res) => {
   res.json({
     status: "ok",
     geminiConfigured: !!process.env.GEMINI_API_KEY,
+    autoConfirmConfigured: !!(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
     database: dbHealth,
     time: new Date().toISOString(),
   });
@@ -57,6 +59,46 @@ app.get("/api/health", async (req, res) => {
 app.get("/api/db-status", async (req, res) => {
   const dbHealth = await getDbHealth();
   res.json(dbHealth);
+});
+
+// Auto-confirm a freshly signed-up user's email using the Supabase Admin API
+// (service role key). This lets signup work instantly even when the project
+// has "Confirm email" enabled, so citizens don't get stuck unable to log in.
+app.post("/api/auth/confirm-signup", async (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return res.status(400).json({
+        success: false,
+        error: "Auto email confirmation is not configured on this server.",
+      });
+    }
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "Missing userId." });
+    }
+
+    const admin = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data, error } = await admin.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+    });
+
+    if (error) {
+      console.warn("[ShehriAwaz Auth] Auto-confirm admin error:", error.message);
+      return res.status(400).json({ success: false, error: error.message });
+    }
+
+    console.log(`[ShehriAwaz Auth] Auto-confirmed email for user ${userId}`);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("[ShehriAwaz Auth] Auto-confirm exception:", err);
+    return res.status(500).json({ success: false, error: err?.message || "Could not confirm signup." });
+  }
 });
 
 // ----------------- PHOTO UPLOAD TO SUPABASE STORAGE -----------------
