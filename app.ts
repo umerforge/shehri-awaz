@@ -12,7 +12,7 @@ import {
   getCachedNewsFromDb,
   getLatestCachedNewsFromDb,
   saveNewsToDbCache,
-} from "./server/db";
+} from "./server/db.js";
 
 dotenv.config();
 
