@@ -9,14 +9,10 @@ import {
   insertDbIssue,
   updateDbIssueStatus,
   getDbHealth,
-  dbSignUp,
-  dbSignIn,
-  dbGetUserProfile,
-  dbUpdateUserProfile,
   getCachedNewsFromDb,
   getLatestCachedNewsFromDb,
   saveNewsToDbCache,
-} from "./server/db.ts";
+} from "./server/db";
 
 dotenv.config();
 
@@ -24,7 +20,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || "127.0.0.1";
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
@@ -60,83 +57,6 @@ app.get("/api/health", async (req, res) => {
 app.get("/api/db-status", async (req, res) => {
   const dbHealth = await getDbHealth();
   res.json(dbHealth);
-});
-
-// ----------------- REAL AUTHENTICATION & PROFILES -----------------
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    const { email, password, fullName, city, area, phone } = req.body;
-    if (!email || !password || !fullName) {
-      return res.status(400).json({ success: false, error: "Email, password, and full name are required." });
-    }
-    const result = await dbSignUp({
-      email,
-      password,
-      fullName,
-      city: city || "Lahore",
-      area: area || "Johar Town",
-      phone: phone || "",
-    });
-
-    if (result.error) {
-      return res.status(400).json({ success: false, error: result.error });
-    }
-    return res.json({ success: true, user: result.user });
-  } catch (err: any) {
-    console.error("Signup error:", err);
-    return res.status(500).json({ success: false, error: "Registration could not be completed. Please try again." });
-  }
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: "Email and password are required." });
-    }
-    const result = await dbSignIn(email, password);
-    if (result.error) {
-      return res.status(401).json({ success: false, error: result.error });
-    }
-    return res.json({ success: true, user: result.user });
-  } catch (err: any) {
-    console.error("Login error:", err);
-    return res.status(500).json({ success: false, error: "Email or password is incorrect. Please try again." });
-  }
-});
-
-app.get("/api/auth/me", async (req, res) => {
-  try {
-    const userId = (req.query.userId as string) || (req.headers["x-user-id"] as string);
-    if (!userId) {
-      return res.status(400).json({ success: false, error: "User ID required" });
-    }
-    const user = await dbGetUserProfile(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found." });
-    }
-    return res.json({ success: true, user });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: "Could not retrieve user profile." });
-  }
-});
-
-app.patch("/api/auth/profile", async (req, res) => {
-  try {
-    const { userId, fullName, city, area, phone } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, error: "User ID required" });
-    }
-    const updated = await dbUpdateUserProfile(userId, {
-      full_name: fullName,
-      city,
-      area,
-      phone,
-    });
-    return res.json({ success: true, user: updated });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: "Could not update profile location." });
-  }
 });
 
 // ----------------- PHOTO UPLOAD TO SUPABASE STORAGE -----------------
@@ -385,7 +305,7 @@ app.post("/api/chat", async (req, res) => {
         reply = `For water supply disruptions or sewage/drainage overflow in ${userCity || "Punjab"}:\n\n• **Responsible Department:** WASA (Water and Sanitation Agency) or your local municipal water board (KWSC in Karachi, WSSP in Peshawar).\n• **Standard Resolution Time:** 24–48 hours for main pipeline leaks, 3–5 days for secondary drainage.\n• **How to file formal complaint:** You can call the WASA helpline (1334 in Lahore/Rawalpindi) or use the Punjab Khidmat Markaz / Citizen Portal for official tracking.`;
       } else if (lower.includes("garbage") || lower.includes("trash") || lower.includes("clean")) {
         reply = `For uncollected garbage, open waste dumping, or lack of waste bins in ${userCity || "your area"}:\n\n• **Responsible Department:** Waste Management Company (e.g., LWMC in Lahore, RWMC in Rawalpindi, SSWMB in Karachi) and local TMA.\n• **Helpline:** Lahore LWMC helpline is 1139. In other cities, contact your local Town Municipal Administration.\n• **Resolution Time:** Municipal waste lifting is scheduled daily; backlog clearance usually takes 24–48 hours after community reporting.`;
-      } else if (lower.includes("electric") || lower.includes("lesco") || lower.includes("kelectric") || lower.includes("power") || lower.includes("wire")) {
+      } else if (lower.includes("electric") || lower.includes("kelectric") || lower.includes("power") || lower.includes("wire")) {
         reply = `For power outages, dangerous open wires, or faulty transformers:\n\n• **Responsible Authority:** Your regional DISCO (LESCO in Lahore, IESCO in Islamabad/Rawalpindi, K-Electric in Karachi, MEPCO in Multan, PESCO in Peshawar).\n• **Safety Warning:** If you notice exposed live wires or sparking transformers, stay at least 20 feet away immediately.\n• **Helpline:** Call 118 for emergency electricity complaints across most DISCOs.`;
       } else if (lower.includes("road") || lower.includes("pothole") || lower.includes("street")) {
         reply = `For damaged roads, deep potholes, or broken pavements:\n\n• **Responsible Department:** C&W (Communication and Works) for provincial highways/main arteries, TEPA/LDA/CDA for urban boulevards, and your local TMA for residential streets in ${userArea || "your neighborhood"}.\n• **Process:** Road maintenance works are typically scheduled in quarterly municipal development cycles, though hazardous potholes are patched on priority.`;
@@ -447,7 +367,7 @@ async function fetchPakistanCivicNewsFromAPI(): Promise<Array<{
   url: string;
   published_at: string;
 }>> {
-  const newsApiKey = process.env.NEWS_API_KEY || "REDACTED";
+  const newsApiKey = process.env.NEWS_API_KEY;
   let rawArticles: any[] = [];
 
   // 1. Try News API if key is present
@@ -965,8 +885,8 @@ async function start() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`ShehriAwaz Server running on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`ShehriAwaz Server running on http://${HOST}:${PORT}`);
   });
 }
 

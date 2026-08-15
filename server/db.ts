@@ -1,5 +1,5 @@
 import pg from 'pg';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 const { Pool } = pg;
 
 // Supabase Postgres Connection URLs
@@ -7,7 +7,7 @@ const { Pool } = pg;
 const DEFAULT_DATABASE_URL = 
   process.env.DATABASE_URL || 
   process.env.DIRECT_URL || 
-  'REDACTED';
+  '';
 
 let pool: pg.Pool | null = null;
 let isConnected = false;
@@ -16,6 +16,9 @@ let lastError: string | null = null;
 export function getDbPool(): pg.Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL || DEFAULT_DATABASE_URL;
+    if (!connectionString) {
+      console.error('[ShehriAwaz Database] DATABASE_URL or DIRECT_URL is not set in environment variables!');
+    }
     pool = new Pool({
       connectionString,
       ssl: {
@@ -49,19 +52,7 @@ export async function initPostgresDatabase() {
       await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
       await client.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
 
-      // 1. Auth Credentials Table (Server-managed secure auth store with bcrypt/sha256 hashing)
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS user_auth (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password_hash VARCHAR(255) NOT NULL,
-          salt VARCHAR(100) NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          last_sign_in_at TIMESTAMPTZ
-        );
-      `);
-
-      // 2. Profiles table matching Supabase schema specification
+      // 1. Profiles table matching Supabase schema specification
       await client.query(`
         CREATE TABLE IF NOT EXISTS profiles (
           id UUID PRIMARY KEY,
@@ -73,7 +64,7 @@ export async function initPostgresDatabase() {
         );
       `);
 
-      // 3. Issues table matching exact Supabase specification
+      // 2. Issues table matching exact Supabase specification
       await client.query(`
         CREATE TABLE IF NOT EXISTS issues (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,7 +87,7 @@ export async function initPostgresDatabase() {
         );
       `);
 
-      // 4. News cache table matching exact Supabase specification
+      // 3. News cache table matching exact Supabase specification
       await client.query(`
         CREATE TABLE IF NOT EXISTS news_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -105,7 +96,7 @@ export async function initPostgresDatabase() {
         );
       `);
 
-      // 5. Create performance indexes for city & area queries and grouping
+      // 4. Create performance indexes for city & area queries and grouping
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_issues_city_area ON issues (city, area_text);
         CREATE INDEX IF NOT EXISTS idx_issues_status ON issues (status);
@@ -115,7 +106,7 @@ export async function initPostgresDatabase() {
         CREATE INDEX IF NOT EXISTS idx_news_cache_date ON news_cache (generated_at);
       `);
 
-      // 6. Enable Row Level Security (RLS) as required
+      // 5. Enable Row Level Security (RLS) as required
       try {
         await client.query(`
           ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -155,7 +146,7 @@ export async function initPostgresDatabase() {
         console.warn('RLS configuration notice:', rlsErr);
       }
 
-      // 7. Check if issues table is empty, if so seed initial Pakistani civic issues
+      // 6. Check if issues table is empty, if so seed initial Pakistani civic issues
       const { rows } = await client.query('SELECT COUNT(*) as count FROM issues');
       const count = parseInt(rows[0].count, 10);
 
@@ -255,228 +246,6 @@ export async function initPostgresDatabase() {
     isConnected = false;
     lastError = err.message || String(err);
     console.error('PostgreSQL Connection error:', lastError);
-  }
-}
-
-// ----------------- AUTHENTICATION HELPERS -----------------
-function hashPassword(password: string, salt: string): string {
-  return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-}
-
-export async function dbSignUp(params: {
-  email: string;
-  password: string;
-  fullName: string;
-  city: string;
-  area: string;
-  phone?: string;
-}) {
-  let client;
-  try {
-    const p = getDbPool();
-    client = await p.connect();
-    
-    await client.query('BEGIN');
-
-    // Check if user already exists
-    const existing = await client.query('SELECT id FROM user_auth WHERE LOWER(email) = LOWER($1)', [params.email]);
-    if (existing.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return { user: null, error: 'An account with this email address already exists. Please login.' };
-    }
-
-    const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = hashPassword(params.password, salt);
-    
-    // Insert into user_auth
-    const authRes = await client.query(`
-      INSERT INTO user_auth (email, password_hash, salt, last_sign_in_at)
-      VALUES (LOWER($1), $2, $3, NOW())
-      RETURNING id, email, created_at;
-    `, [params.email, passwordHash, salt]);
-
-    const userId = authRes.rows[0].id;
-
-    // Insert into profiles matching uuid
-    await client.query(`
-      INSERT INTO profiles (id, full_name, city, area, phone, created_at)
-      VALUES ($1, $2, $3, $4, $5, NOW())
-      ON CONFLICT (id) DO UPDATE SET
-        full_name = EXCLUDED.full_name,
-        city = EXCLUDED.city,
-        area = EXCLUDED.area,
-        phone = EXCLUDED.phone;
-    `, [userId, params.fullName, params.city, params.area, params.phone || null]);
-
-    await client.query('COMMIT');
-
-    const userProfile = {
-      id: userId,
-      email: params.email,
-      full_name: params.fullName,
-      city: params.city,
-      area: params.area,
-      phone: params.phone || '',
-      created_at: authRes.rows[0].created_at,
-    };
-
-    return { user: userProfile, error: null };
-  } catch (err: any) {
-    if (client) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (rollbackErr) {
-        // Ignore
-      }
-    }
-    console.error('dbSignUp error:', err);
-    return { user: null, error: `Registration failed: ${err.message || err}` };
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-}
-
-export async function dbSignIn(email: string, pass: string) {
-  const p = getDbPool();
-  try {
-    const authRes = await p.query(`
-      SELECT id, email, password_hash, salt, created_at 
-      FROM user_auth 
-      WHERE LOWER(email) = LOWER($1)
-    `, [email]);
-
-    if (authRes.rows.length === 0) {
-      return { user: null, error: 'Email or password is incorrect. Please try again.' };
-    }
-
-    const authRow = authRes.rows[0];
-    const calcHash = hashPassword(pass, authRow.salt);
-
-    if (calcHash !== authRow.password_hash) {
-      return { user: null, error: 'Email or password is incorrect. Please try again.' };
-    }
-
-    // Update last sign in
-    await p.query('UPDATE user_auth SET last_sign_in_at = NOW() WHERE id::text = $1::text', [String(authRow.id)]);
-
-    // Fetch profile with text comparison to support both UUID and VARCHAR id types
-    const profileRes = await p.query('SELECT * FROM profiles WHERE id::text = $1::text', [String(authRow.id)]);
-    const profileRow = profileRes.rows[0] || {};
-
-    const userProfile = {
-      id: String(authRow.id),
-      email: authRow.email,
-      full_name: profileRow.full_name || email.split('@')[0],
-      city: profileRow.city || 'Lahore',
-      area: profileRow.area || 'Johar Town',
-      phone: profileRow.phone || '',
-      created_at: profileRow.created_at || authRow.created_at,
-    };
-
-    return { user: userProfile, error: null };
-  } catch (err: any) {
-    console.error('dbSignIn error:', err);
-    return { user: null, error: 'Email or password is incorrect. Please try again.' };
-  }
-}
-
-export async function dbGetUserProfile(userId: string) {
-  const p = getDbPool();
-  try {
-    const res = await p.query(`
-      SELECT p.*, a.email 
-      FROM profiles p
-      LEFT JOIN user_auth a ON p.id::text = a.id::text
-      WHERE p.id::text = $1::text OR a.id::text = $1::text
-      LIMIT 1
-    `, [String(userId)]);
-
-    if (res.rows.length === 0) {
-      // If user exists in user_auth but not in profiles yet, look up user_auth
-      const authLookup = await p.query('SELECT id, email, created_at FROM user_auth WHERE id::text = $1::text', [String(userId)]);
-      if (authLookup.rows.length > 0) {
-        const row = authLookup.rows[0];
-        return {
-          id: String(row.id),
-          email: row.email || '',
-          full_name: (row.email || 'Citizen').split('@')[0],
-          city: 'Lahore',
-          area: 'Johar Town',
-          phone: '',
-          created_at: row.created_at,
-        };
-      }
-      return null;
-    }
-
-    const row = res.rows[0];
-    return {
-      id: String(row.id),
-      email: row.email || '',
-      full_name: row.full_name || 'Citizen',
-      city: row.city || 'Lahore',
-      area: row.area || 'Johar Town',
-      phone: row.phone || '',
-      created_at: row.created_at,
-    };
-  } catch (err) {
-    console.error('dbGetUserProfile error:', err);
-    return null;
-  }
-}
-
-export async function dbUpdateUserProfile(userId: string, data: { full_name?: string; city?: string; area?: string; phone?: string }) {
-  const p = getDbPool();
-  try {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let idx = 1;
-
-    if (data.full_name !== undefined) {
-      fields.push(`full_name = $${idx++}`);
-      values.push(data.full_name);
-    }
-    if (data.city !== undefined) {
-      fields.push(`city = $${idx++}`);
-      values.push(data.city);
-    }
-    if (data.area !== undefined) {
-      fields.push(`area = $${idx++}`);
-      values.push(data.area);
-    }
-    if (data.phone !== undefined) {
-      fields.push(`phone = $${idx++}`);
-      values.push(data.phone);
-    }
-
-    if (fields.length === 0) return await dbGetUserProfile(userId);
-
-    values.push(String(userId));
-    const query = `
-      UPDATE profiles 
-      SET ${fields.join(', ')} 
-      WHERE id::text = $${idx}::text
-      RETURNING *;
-    `;
-    const res = await p.query(query, values);
-    if (res.rows.length === 0) {
-      // If profile row didn't exist yet, insert it
-      await p.query(`
-        INSERT INTO profiles (id, full_name, city, area, phone, created_at)
-        VALUES ($1, $2, $3, $4, $5, NOW())
-        ON CONFLICT (id) DO UPDATE SET
-          full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
-          city = COALESCE(EXCLUDED.city, profiles.city),
-          area = COALESCE(EXCLUDED.area, profiles.area),
-          phone = COALESCE(EXCLUDED.phone, profiles.phone);
-      `, [String(userId), data.full_name || 'Citizen', data.city || 'Lahore', data.area || 'Johar Town', data.phone || null]);
-    }
-    return await dbGetUserProfile(userId);
-  } catch (err) {
-    console.error('dbUpdateUserProfile error:', err);
-    return null;
   }
 }
 
