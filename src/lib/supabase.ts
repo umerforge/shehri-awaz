@@ -2,19 +2,10 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CivicIssue, UserProfile, IssueStatus } from '../types';
 import { SEED_ISSUES } from '../data/seedData';
 
-// Supabase Environment variables with multi-framework compatibility (Vite / Next.js / Standard)
+// Supabase client configuration (Vite environment variables)
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = 
-  metaEnv.VITE_SUPABASE_URL || 
-  metaEnv.NEXT_PUBLIC_SUPABASE_URL || 
-  metaEnv.SUPABASE_URL || 
-  'https://fldubtssnhnusqtnermz.supabase.co';
-
-const supabaseAnonKey = 
-  metaEnv.VITE_SUPABASE_ANON_KEY || 
-  metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  metaEnv.SUPABASE_ANON_KEY || 
-  '';
+const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
