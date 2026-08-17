@@ -102,33 +102,69 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
       return;
     }
     setIsLocating(true);
-    setLocationNotice('Detecting your location in Pakistan...');
+    setLocationNotice('Detecting your location...');
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setIsLocating(false);
         const { latitude, longitude } = pos.coords;
-        if (latitude > 31.4 && latitude < 31.7 && longitude > 74.2 && longitude < 74.5) {
-          setCity('Lahore');
-          setArea('Johar Town');
-          setLocationNotice('Set location to Lahore • Johar Town.');
-        } else if (latitude > 24.7 && latitude < 25.1 && longitude > 66.9 && longitude < 67.2) {
-          setCity('Karachi');
-          setArea('Clifton');
-          setLocationNotice('Set location to Karachi • Clifton.');
-        } else if (latitude > 33.5 && latitude < 33.8 && longitude > 72.9 && longitude < 73.2) {
-          setCity('Islamabad');
-          setArea('F-7 (Jinnah Super)');
-          setLocationNotice('Set location to Islamabad • F-7.');
+
+        // Match coordinates to nearest Pakistani city (broad bounding boxes)
+        const cities: { name: string; lat: [number, number]; lon: [number, number]; defaultArea: string }[] = [
+          { name: 'Lahore',       lat: [31.3, 31.7],  lon: [74.1, 74.5],  defaultArea: 'Johar Town' },
+          { name: 'Karachi',      lat: [24.7, 25.1],  lon: [66.9, 67.3],  defaultArea: 'Clifton' },
+          { name: 'Islamabad',    lat: [33.5, 33.8],  lon: [72.9, 73.3],  defaultArea: 'F-7 (Jinnah Super)' },
+          { name: 'Rawalpindi',   lat: [33.5, 33.8],  lon: [72.9, 73.2],  defaultArea: 'Saddar' },
+          { name: 'Faisalabad',   lat: [31.3, 31.5],  lon: [73.0, 73.2],  defaultArea: 'D-Ground' },
+          { name: 'Multan',       lat: [30.1, 30.3],  lon: [71.4, 71.6],  defaultArea: 'Gulgasht Colony' },
+          { name: 'Peshawar',     lat: [33.9, 34.1],  lon: [71.4, 71.7],  defaultArea: 'Hayatabad' },
+          { name: 'Quetta',       lat: [30.1, 30.3],  lon: [66.9, 67.1],  defaultArea: 'Satellite Town' },
+          { name: 'Hyderabad',    lat: [25.3, 25.5],  lon: [68.3, 68.5],  defaultArea: 'Latifabad' },
+          { name: 'Sialkot',      lat: [32.4, 32.6],  lon: [74.4, 74.6],  defaultArea: 'Cantonment' },
+          { name: 'Sargodha',     lat: [32.0, 32.2],  lon: [72.6, 72.8],  defaultArea: 'Satellite Town' },
+          { name: 'Abbottabad',   lat: [34.1, 34.2],  lon: [73.1, 73.3],  defaultArea: 'Supply Area' },
+          { name: 'Mardan',       lat: [34.1, 34.3],  lon: [71.9, 72.1],  defaultArea: 'Shamsi' },
+          { name: 'Larkana',      lat: [27.5, 27.7],  lon: [68.2, 68.4],  defaultArea: 'Bund Road' },
+        ];
+
+        let matchedCity: typeof cities[number] | null = null;
+        let minDist = Infinity;
+
+        for (const c of cities) {
+          const midLat = (c.lat[0] + c.lat[1]) / 2;
+          const midLon = (c.lon[0] + c.lon[1]) / 2;
+          const dist = Math.sqrt(Math.pow(latitude - midLat, 2) + Math.pow(longitude - midLon, 2));
+          if (dist < minDist) {
+            minDist = dist;
+            matchedCity = c;
+          }
+        }
+
+        setIsLocating(false);
+
+        if (matchedCity && minDist < 0.5) {
+          setCity(matchedCity.name);
+          setArea(matchedCity.defaultArea);
+          setLocationNotice(`Detected: ${matchedCity.name} — set to ${matchedCity.defaultArea}. Adjust area if needed.`);
         } else {
-          setCity('Lahore');
-          setLocationNotice('GPS detected. Set to nearest civic center.');
+          // Fallback: pick the closest city even if far
+          if (matchedCity) {
+            setCity(matchedCity.name);
+            setArea(matchedCity.defaultArea);
+            setLocationNotice(`Closest city detected: ${matchedCity.name}. Please verify and adjust your area.`);
+          } else {
+            setLocationNotice('Could not identify a supported city. Please select manually above.');
+          }
         }
       },
-      () => {
+      (err) => {
         setIsLocating(false);
-        setLocationNotice('Could not retrieve GPS coordinates. Please select your area above.');
-      }
+        let msg = 'Could not retrieve GPS coordinates.';
+        if (err.code === 1) msg = 'Location permission denied. Please allow location access in your browser settings.';
+        else if (err.code === 2) msg = 'Location unavailable. Please select your area manually.';
+        else if (err.code === 3) msg = 'Location request timed out. Please try again or select manually.';
+        setLocationNotice(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
   };
 
