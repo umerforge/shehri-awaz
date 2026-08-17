@@ -605,21 +605,61 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(['garbage', 'water', 'road', 'electricity', 'other'] as IssueCategory[]).map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setManualCategory(cat)}
-                      className={`px-3 py-2 rounded-lg border text-xs font-bold capitalize ${
-                        manualCategory === cat
-                          ? 'bg-[#0F3D2A] text-white border-[#0F3D2A]'
-                          : 'bg-white text-stone-700 border-stone-300'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">Issue Category</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {([
+                        { id: 'garbage', label: 'Waste', urdu: 'کوڑا' },
+                        { id: 'water', label: 'Water', urdu: 'پانی' },
+                        { id: 'road', label: 'Roads', urdu: 'سڑک' },
+                        { id: 'electricity', label: 'Power', urdu: 'بجلی' },
+                        { id: 'other', label: 'Other', urdu: 'دیگر' },
+                      ] as { id: IssueCategory; label: string; urdu: string }[]).map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setManualCategory(cat.id)}
+                          className={`px-3 py-2 rounded-lg border text-xs font-bold ${
+                            manualCategory === cat.id
+                              ? 'bg-[#0F3D2A] text-white border-[#0F3D2A]'
+                              : 'bg-white text-stone-700 border-stone-300'
+                          }`}
+                        >
+                          {cat.label} <span className="font-normal text-[10px] opacity-70">({cat.urdu})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">How urgent is this?</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { id: 'low', label: 'Low', color: 'blue', desc: 'Routine maintenance' },
+                        { id: 'medium', label: 'Medium', color: 'yellow', desc: 'Affects daily life' },
+                        { id: 'high', label: 'High', color: 'orange', desc: 'Safety concern' },
+                        { id: 'urgent', label: 'Urgent', color: 'red', desc: 'Immediate danger' },
+                      ] as { id: IssueSeverity; label: string; color: string; desc: string }[]).map((sev) => (
+                        <button
+                          key={sev.id}
+                          type="button"
+                          onClick={() => setManualSeverity(sev.id)}
+                          className={`px-2 py-2 rounded-lg border text-xs font-bold text-center ${
+                            manualSeverity === sev.id
+                              ? sev.color === 'blue' ? 'bg-blue-600 text-white border-blue-600'
+                                : sev.color === 'yellow' ? 'bg-yellow-500 text-stone-900 border-yellow-500'
+                                : sev.color === 'orange' ? 'bg-orange-500 text-white border-orange-500'
+                                : 'bg-red-600 text-white border-red-600'
+                              : 'bg-white text-stone-700 border-stone-300'
+                          }`}
+                        >
+                          {sev.label}
+                          <span className="block text-[10px] font-normal opacity-80">{sev.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
