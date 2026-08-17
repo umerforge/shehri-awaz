@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { PAKISTAN_CITIES, getCityDetails, getRecommendedDepartment } from '../data/pakistanLocations';
 import { CivicIssue, IssueCategory, IssueSeverity, UserProfile } from '../types';
 import { uploadIssuePhoto, submitCivicIssue, safeFetchJson } from '../lib/supabase';
+import { SEVERITY_GUIDELINES } from '../data/severityGuidelines';
 import { 
   Camera, 
   Upload, 
@@ -729,8 +730,43 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
                 <p className="pt-2 text-xs text-stone-600 italic">
                   "{createdIssue.summary}"
                 </p>
+                </div>
+
+                {useMemo(() => {
+                  if (!manualSeverity) return null;
+                  const guideline = SEVERITY_GUIDELINES.find((g) => g.level === manualSeverity);
+                  if (!guideline) return null;
+                  const categoryExamples = manualCategory ? guideline.examples[manualCategory] : [];
+                  return (
+                    <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 space-y-2 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-stone-700">
+                          Expected Response Time
+                        </span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          guideline.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                          guideline.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                          guideline.color === 'orange' ? 'bg-orange-100 text-orange-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {guideline.responseTime}
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-600 leading-relaxed">{guideline.description}</p>
+                      {categoryExamples.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">Examples for {manualCategory}:</span>
+                          <ul className="text-[11px] text-stone-600 mt-1 space-y-0.5 list-disc list-inside">
+                            {categoryExamples.slice(0, 2).map((ex, i) => (
+                              <li key={i}>{ex}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }, [manualSeverity, manualCategory])}
               </div>
-            </div>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 justify-center pt-2">
