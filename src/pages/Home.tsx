@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CivicIssue, UserProfile } from '../types';
 import { DashboardStats } from '../components/DashboardStats';
 import { IssueCard } from '../components/IssueCard';
+import { getDepartmentsByCity } from '../data/governmentDepartments';
 import { 
   PlusCircle, 
   Layers, 
@@ -248,6 +249,65 @@ export const Home: React.FC<HomeProps> = ({
             ))}
           </div>
         </section>
+
+        {/* Government Departments for Current City */}
+        {useMemo(() => {
+          const cityDepts = getDepartmentsByCity(selectedCity);
+          if (cityDepts.length === 0) return null;
+          return (
+            <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-600 uppercase tracking-wider mb-1">
+                <Building2 className="w-4 h-4" />
+                <span>Key Government Departments</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 mb-1">
+                Who Handles What in {selectedCity}
+              </h2>
+              <p className="text-xs text-stone-500 mb-6">
+                Know your responsible departments and their helplines before filing a report
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cityDepts.map((dept) => (
+                  <div
+                    key={dept.abbreviation}
+                    className="bg-[#F8FAF7] border border-stone-200 rounded-xl p-4 hover:border-[#0F3D2A] hover:shadow-sm transition"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-stone-900 leading-snug">{dept.fullName}</h3>
+                        <span className="text-xs font-urdu text-emerald-800">{dept.fullNameUrdu}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-stone-500 leading-relaxed mb-3">{dept.description}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {dept.helplines.slice(0, 2).map((h) => (
+                        <a
+                          key={h}
+                          href={`tel:${h}`}
+                          className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-md hover:bg-emerald-200 transition"
+                        >
+                          <Phone className="w-3 h-3" />
+                          {h}
+                        </a>
+                      ))}
+                      {dept.website && (
+                        <a
+                          href={dept.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                        >
+                          Website →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        }, [selectedCity])}
 
         {/* Recent Civic Ledger Cards */}
         <section className="space-y-4">
