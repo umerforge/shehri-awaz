@@ -3,6 +3,7 @@ import { PAKISTAN_CITIES, getCityDetails, getRecommendedDepartment } from '../da
 import { CivicIssue, IssueCategory, IssueSeverity, UserProfile } from '../types';
 import { uploadIssuePhoto, submitCivicIssue, safeFetchJson } from '../lib/supabase';
 import { SEVERITY_GUIDELINES } from '../data/severityGuidelines';
+import { GOVERNMENT_DEPARTMENTS } from '../data/governmentDepartments';
 import { 
   Camera, 
   Upload, 
@@ -16,7 +17,8 @@ import {
   ArrowRight, 
   ArrowLeft,
   Building2,
-  FileText
+  FileText,
+  Phone
 } from 'lucide-react';
 
 interface ReportProblemViewProps {
@@ -767,6 +769,46 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* Department Helpline */}
+            {useMemo(() => {
+              const dept = GOVERNMENT_DEPARTMENTS.find(
+                (d) => d.fullName.toLowerCase().includes(createdIssue.department.toLowerCase()) ||
+                       d.abbreviation.toLowerCase() === createdIssue.department.toLowerCase()
+              );
+              if (!dept) return null;
+              return (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left max-w-lg mx-auto space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Direct Helpline for {dept.abbreviation}</span>
+                  </div>
+                  <p className="text-xs text-stone-600">{dept.description}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {dept.helplines.map((h) => (
+                      <a
+                        key={h}
+                        href={`tel:${h}`}
+                        className="inline-flex items-center gap-1.5 bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-emerald-800 transition"
+                      >
+                        <Phone className="w-3 h-3" />
+                        Call {h}
+                      </a>
+                    ))}
+                    {dept.website && (
+                      <a
+                        href={dept.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-semibold text-blue-700 hover:underline"
+                      >
+                        Official Website →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            }, [createdIssue.department])}
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 justify-center pt-2">
