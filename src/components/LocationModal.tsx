@@ -47,42 +47,69 @@ export const LocationModal: React.FC<LocationModalProps> = ({
     }
 
     setIsDetecting(true);
-    setGeoMessage('Finding your approximate location in Pakistan...');
+    setGeoMessage('Finding your location...');
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setIsDetecting(false);
         const { latitude, longitude } = position.coords;
-        // Approximate Pakistani city centers
-        if (latitude > 31.4 && latitude < 31.7 && longitude > 74.2 && longitude < 74.5) {
-          setSelectedCity('Lahore');
-          setSelectedArea('Johar Town');
-          setGeoMessage('Detected Lahore area.');
-        } else if (latitude > 24.7 && latitude < 25.1 && longitude > 66.9 && longitude < 67.2) {
-          setSelectedCity('Karachi');
-          setSelectedArea('Clifton');
-          setGeoMessage('Detected Karachi area.');
-        } else if (latitude > 33.5 && latitude < 33.8 && longitude > 72.9 && longitude < 73.2) {
-          setSelectedCity('Islamabad');
-          setSelectedArea('F-7 (Jinnah Super)');
-          setGeoMessage('Detected Islamabad / Rawalpindi area.');
-        } else if (latitude > 33.9 && latitude < 34.1 && longitude > 71.4 && longitude < 71.7) {
-          setSelectedCity('Peshawar');
-          setSelectedArea('Hayatabad');
-          setGeoMessage('Detected Peshawar area.');
-        } else if (latitude > 30.1 && latitude < 30.3 && longitude > 71.4 && longitude < 71.6) {
-          setSelectedCity('Multan');
-          setSelectedArea('Gulgasht Colony');
-          setGeoMessage('Detected Multan area.');
+
+        const cities: { name: string; lat: [number, number]; lon: [number, number]; defaultArea: string }[] = [
+          { name: 'Lahore',       lat: [31.3, 31.7],  lon: [74.1, 74.5],  defaultArea: 'Johar Town' },
+          { name: 'Karachi',      lat: [24.7, 25.1],  lon: [66.9, 67.3],  defaultArea: 'Clifton' },
+          { name: 'Islamabad',    lat: [33.5, 33.8],  lon: [72.9, 73.3],  defaultArea: 'F-7 (Jinnah Super)' },
+          { name: 'Rawalpindi',   lat: [33.5, 33.8],  lon: [72.9, 73.2],  defaultArea: 'Saddar' },
+          { name: 'Faisalabad',   lat: [31.3, 31.5],  lon: [73.0, 73.2],  defaultArea: 'D-Ground' },
+          { name: 'Multan',       lat: [30.1, 30.3],  lon: [71.4, 71.6],  defaultArea: 'Gulgasht Colony' },
+          { name: 'Peshawar',     lat: [33.9, 34.1],  lon: [71.4, 71.7],  defaultArea: 'Hayatabad' },
+          { name: 'Quetta',       lat: [30.1, 30.3],  lon: [66.9, 67.1],  defaultArea: 'Satellite Town' },
+          { name: 'Hyderabad',    lat: [25.3, 25.5],  lon: [68.3, 68.5],  defaultArea: 'Latifabad' },
+          { name: 'Sialkot',      lat: [32.4, 32.6],  lon: [74.4, 74.6],  defaultArea: 'Cantonment' },
+          { name: 'Sargodha',     lat: [32.0, 32.2],  lon: [72.6, 72.8],  defaultArea: 'Satellite Town' },
+          { name: 'Abbottabad',   lat: [34.1, 34.2],  lon: [73.1, 73.3],  defaultArea: 'Supply Area' },
+          { name: 'Mardan',       lat: [34.1, 34.3],  lon: [71.9, 72.1],  defaultArea: 'Shamsi' },
+          { name: 'Larkana',      lat: [27.5, 27.7],  lon: [68.2, 68.4],  defaultArea: 'Bund Road' },
+        ];
+
+        let matchedCity: typeof cities[number] | null = null;
+        let minDist = Infinity;
+
+        for (const c of cities) {
+          const midLat = (c.lat[0] + c.lat[1]) / 2;
+          const midLon = (c.lon[0] + c.lon[1]) / 2;
+          const dist = Math.sqrt(Math.pow(latitude - midLat, 2) + Math.pow(longitude - midLon, 2));
+          if (dist < minDist) {
+            minDist = dist;
+            matchedCity = c;
+          }
+        }
+
+        setIsDetecting(false);
+
+        if (matchedCity && minDist < 0.5) {
+          setSelectedCity(matchedCity.name);
+          setSelectedArea(matchedCity.defaultArea);
+          setGeoMessage(`Detected: ${matchedCity.name}. Adjust area below if needed.`);
+        } else if (matchedCity) {
+          setSelectedCity(matchedCity.name);
+          setSelectedArea(matchedCity.defaultArea);
+          setGeoMessage(`Closest city: ${matchedCity.name}. Please verify your area.`);
         } else {
-          setGeoMessage('Location found. Defaulted to Lahore.');
-          setSelectedCity('Lahore');
+          setGeoMessage('Could not identify a supported city. Please select manually.');
         }
       },
       (error) => {
         setIsDetecting(false);
-        setGeoMessage('Could not retrieve GPS location. Please select your city from the list.');
-      }
+        if (error.code === 1) {
+          setGeoMessage('Location permission denied. Please allow location access in your browser settings.');
+        } else if (error.code === 2) {
+          setGeoMessage('Location unavailable. Please select your city from the list.');
+        } else if (error.code === 3) {
+          setGeoMessage('Location request timed out. Please try again or select manually.');
+        } else {
+          setGeoMessage('Could not retrieve GPS location. Please select your city from the list.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
   };
 
