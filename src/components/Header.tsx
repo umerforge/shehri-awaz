@@ -11,7 +11,8 @@ import {
   LogOut, 
   Menu, 
   X,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -24,6 +25,7 @@ interface HeaderProps {
   onOpenAuthModal: () => void;
   onLogout: () => void;
   onOpenReportModal: () => void;
+  onOpenCivicRightsModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuthModal,
   onLogout,
   onOpenReportModal,
+  onOpenCivicRightsModal,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -145,6 +148,18 @@ export const Header: React.FC<HeaderProps> = ({
               );
             })}
           </nav>
+
+          {/* Civic Rights Guide */}
+          {onOpenCivicRightsModal && (
+            <button
+              onClick={onOpenCivicRightsModal}
+              className="hidden lg:flex items-center gap-1.5 text-xs text-emerald-200/80 hover:text-emerald-100 px-2.5 py-1.5 rounded-lg hover:bg-emerald-900/40 transition font-medium"
+              id="btn-civic-rights"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Rights Guide</span>
+            </button>
+          )}
 
           {/* Right Auth controls */}
           <div className="hidden lg:flex items-center gap-3">

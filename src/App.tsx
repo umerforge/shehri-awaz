@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LocationModal } from './components/LocationModal';
 import { AuthModal } from './components/AuthModal';
+import { CivicRightsModal } from './components/CivicRightsModal';
 import { Home } from './pages/Home';
 import { CivicIssues } from './pages/CivicIssues';
 import { ReportProblemView } from './components/ReportProblemView';
@@ -35,6 +36,7 @@ export default function App() {
   // Modals
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isCivicRightsModalOpen, setIsCivicRightsModalOpen] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -114,6 +116,7 @@ export default function App() {
           setCurrentTab('report');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
+        onOpenCivicRightsModal={() => setIsCivicRightsModalOpen(true)}
       />
 
       {/* Main Tab Content */}
@@ -198,6 +201,12 @@ export default function App() {
         }}
         defaultCity={city}
         defaultArea={area}
+      />
+
+      {/* Civic Rights Guide Modal */}
+      <CivicRightsModal
+        isOpen={isCivicRightsModalOpen}
+        onClose={() => setIsCivicRightsModalOpen(false)}
       />
 
     </div>
