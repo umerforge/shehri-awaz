@@ -28,6 +28,7 @@ interface ReportProblemViewProps {
   onSuccess: (newIssue: CivicIssue) => void;
   onCancel?: () => void;
   onNavigateToIssues?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
@@ -37,6 +38,7 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
   onSuccess,
   onCancel,
   onNavigateToIssues,
+  onOpenAuthModal,
 }) => {
   // Step State
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Photo, 2: Location, 3: Description/Submit, 4: Confirmed
@@ -266,7 +268,53 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
   return (
     <div className="max-w-3xl mx-auto my-8 px-4" id="report-problem-container">
       
-      {/* Container Card */}
+      {/* Auth Gate — require login before reporting */}
+      {!user && (
+        <div className="bg-white rounded-2xl border-2 border-stone-300 shadow-lg overflow-hidden">
+          <div className="bg-[#0F3D2A] text-white p-6 sm:p-8">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+              Citizen Civic Reporting
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-serif font-black mt-1">
+              Report a Problem (مسئلہ درج کریں)
+            </h1>
+          </div>
+          <div className="p-8 sm:p-12 text-center space-y-5">
+            <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto border-2 border-amber-200">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-serif font-bold text-stone-900">
+                Sign in to submit a report
+              </h2>
+              <p className="text-sm text-stone-600 max-w-md mx-auto leading-relaxed">
+                You need an account to report civic issues. This ensures every report is traceable and helps departments follow up with you directly.
+              </p>
+              <p className="text-xs font-urdu text-emerald-700 font-bold">
+                رپورٹ درج کرنے کے لیے اکاؤنٹ درکار ہے
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 justify-center pt-2">
+              <button
+                onClick={onOpenAuthModal}
+                className="px-6 py-3 rounded-xl bg-[#0F3D2A] text-white font-bold text-sm hover:bg-emerald-900 transition shadow-sm"
+                id="btn-auth-gate-signup"
+              >
+                Sign Up / Login
+              </button>
+              <button
+                onClick={onCancel}
+                className="px-6 py-3 rounded-xl bg-white border border-stone-300 text-stone-700 font-bold text-sm hover:bg-stone-100 transition"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Container Card — only show form if logged in */}
+      {user && (
       <div className="bg-white rounded-2xl border-2 border-stone-300 shadow-lg overflow-hidden">
         
         {/* Top Header */}
@@ -873,6 +921,7 @@ export const ReportProblemView: React.FC<ReportProblemViewProps> = ({
         )}
 
       </div>
+      )}
     </div>
   );
 };

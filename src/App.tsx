@@ -156,6 +156,7 @@ export default function App() {
               setCurrentTab('issues');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
 
